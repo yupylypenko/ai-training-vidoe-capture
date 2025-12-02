@@ -22,3 +22,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Snapshots directory
+snapshots/
+
+# Logs
+*.log
+streamlit.log
+
