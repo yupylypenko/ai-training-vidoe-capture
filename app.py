@@ -9,6 +9,106 @@ import os
 dial_api_url = "https://api.example.com/dial/inference"
 
 
+def display_dial_insights(insights: dict, snapshot_file: str = None):
+    """
+    Display DIAL API insights using Streamlit components.
+    
+    Args:
+        insights: Dictionary containing insights from DIAL API
+        snapshot_file: Optional path to the snapshot file for display
+    """
+    if snapshot_file:
+        st.caption(f"From snapshot: {snapshot_file}")
+    
+    # Display status
+    if insights.get('status'):
+        status_emoji = "✅" if insights['status'] == 'success' else "⚠️"
+        st.text(f"{status_emoji} Status: {insights['status']}")
+    
+    # Display confidence if available
+    if insights.get('confidence') is not None:
+        st.text(f"Confidence: {insights['confidence']:.2%}" if isinstance(insights['confidence'], (int, float)) else f"Confidence: {insights['confidence']}")
+    
+    # Display predictions in a table if available
+    if insights.get('predictions') and len(insights['predictions']) > 0:
+        st.subheader("Predictions")
+        if isinstance(insights['predictions'], list):
+            predictions_data = []
+            for pred in insights['predictions']:
+                if isinstance(pred, dict):
+                    predictions_data.append(pred)
+                else:
+                    predictions_data.append({"prediction": str(pred)})
+            if predictions_data:
+                st.table(predictions_data)
+        else:
+            st.text(str(insights['predictions']))
+    
+    # Display detections in a table if available
+    if insights.get('detections') and len(insights['detections']) > 0:
+        st.subheader("Detections")
+        if isinstance(insights['detections'], list):
+            detections_data = []
+            for det in insights['detections']:
+                if isinstance(det, dict):
+                    detections_data.append(det)
+                else:
+                    detections_data.append({"detection": str(det)})
+            if detections_data:
+                st.table(detections_data)
+        else:
+            st.text(str(insights['detections']))
+    
+    # Display labels if available
+    if insights.get('labels') and len(insights['labels']) > 0:
+        st.subheader("Labels")
+        if isinstance(insights['labels'], list):
+            labels_text = ", ".join(str(label) for label in insights['labels'])
+            st.text(labels_text)
+        else:
+            st.text(str(insights['labels']))
+    
+    # Display results if available
+    if insights.get('results'):
+        st.subheader("Results")
+        if isinstance(insights['results'], (dict, list)):
+            st.json(insights['results'])
+        else:
+            st.text(str(insights['results']))
+    
+    # Display analysis if available
+    if insights.get('analysis'):
+        st.subheader("Analysis")
+        if isinstance(insights['analysis'], (dict, list)):
+            st.json(insights['analysis'])
+        else:
+            st.text(str(insights['analysis']))
+    
+    # Display objects if available
+    if insights.get('objects') and len(insights['objects']) > 0:
+        st.subheader("Objects")
+        if isinstance(insights['objects'], list):
+            objects_data = []
+            for obj in insights['objects']:
+                if isinstance(obj, dict):
+                    objects_data.append(obj)
+                else:
+                    objects_data.append({"object": str(obj)})
+            if objects_data:
+                st.table(objects_data)
+        else:
+            st.text(str(insights['objects']))
+    
+    # Display metadata if available
+    if insights.get('metadata') and insights['metadata']:
+        st.subheader("Metadata")
+        st.json(insights['metadata'])
+    
+    # Option to view raw response
+    with st.expander("View Raw API Response"):
+        st.json(insights.get('raw_response', {}))
+
+
 def run_dial_inference(image_path: str):
     """
     Send a POST request to the DIAL API endpoint with an image file and extract insights.
@@ -84,7 +184,19 @@ if camera_source == "Network Camera URL":
 elif camera_source == "Test/Demo Mode":
     st.info("Test mode will generate a sample image for testing purposes.")
 
+# DIAL API inference option
+enable_dial_inference = st.checkbox("Enable DIAL API Inference", value=False)
+
+# Initialize session state for insights
+if 'dial_insights' not in st.session_state:
+    st.session_state.dial_insights = None
+if 'last_snapshot_file' not in st.session_state:
+    st.session_state.last_snapshot_file = None
+
 if st.button("Capture Snapshot"):
+    # Clear previous insights when capturing a new snapshot
+    st.session_state.dial_insights = None
+    st.session_state.last_snapshot_file = None
     frame = None
     success_message = ""
     caption = ""
@@ -178,3 +290,32 @@ if st.button("Capture Snapshot"):
         if success_message:
             st.success(success_message)
         st.info(f"Snapshot saved as: `{filename}`")
+        
+        # Store the snapshot filename in session state
+        st.session_state.last_snapshot_file = filename
+        
+        # Run DIAL inference if enabled
+        if enable_dial_inference:
+            st.divider()
+            st.subheader("DIAL API Insights")
+            
+            with st.spinner("Sending image to DIAL API and processing..."):
+                try:
+                    insights = run_dial_inference(filename)
+                    
+                    # Store insights in session state
+                    st.session_state.dial_insights = insights
+                    
+                    # Display insights using helper function
+                    display_dial_insights(insights, filename)
+                    
+                except Exception as e:
+                    st.error(f"Error running DIAL inference: {str(e)}")
+                    st.info("Make sure the DIAL API endpoint is correctly configured and accessible.")
+                    st.session_state.dial_insights = None
+
+# Display stored insights if available (from previous capture)
+if st.session_state.dial_insights is not None and st.session_state.last_snapshot_file:
+    st.divider()
+    st.subheader("Latest DIAL API Insights")
+    display_dial_insights(st.session_state.dial_insights, st.session_state.last_snapshot_file)
