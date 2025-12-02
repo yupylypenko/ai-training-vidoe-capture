@@ -5,6 +5,69 @@ import numpy as np
 from datetime import datetime
 import os
 
+# DIAL API endpoint URL
+dial_api_url = "https://api.example.com/dial/inference"
+
+
+def run_dial_inference(image_path: str):
+    """
+    Send a POST request to the DIAL API endpoint with an image file and extract insights.
+    
+    Args:
+        image_path: Path to the image file to send
+        
+    Returns:
+        Dictionary containing extracted insights from the API response
+    """
+    try:
+        # Open the image file in binary mode
+        with open(image_path, 'rb') as image_file:
+            # Prepare the file for upload
+            files = {'image': (os.path.basename(image_path), image_file, 'image/jpeg')}
+            
+            # Send POST request to DIAL API endpoint
+            response = requests.post(dial_api_url, files=files)
+            
+            # Check if the request was successful
+            response.raise_for_status()
+            
+            # Process the API response and extract insights from JSON data
+            try:
+                json_data = response.json()
+                
+                # Extract relevant insights from the JSON response
+                insights = {
+                    'status': json_data.get('status', 'unknown'),
+                    'predictions': json_data.get('predictions', []),
+                    'confidence': json_data.get('confidence', None),
+                    'detections': json_data.get('detections', []),
+                    'labels': json_data.get('labels', []),
+                    'metadata': json_data.get('metadata', {}),
+                    'raw_response': json_data  # Keep full response for reference
+                }
+                
+                # Extract any additional relevant fields that might be present
+                if 'results' in json_data:
+                    insights['results'] = json_data['results']
+                if 'analysis' in json_data:
+                    insights['analysis'] = json_data['analysis']
+                if 'objects' in json_data:
+                    insights['objects'] = json_data['objects']
+                
+                return insights
+                
+            except ValueError as e:
+                # Response is not valid JSON
+                raise ValueError(f"API response is not valid JSON: {e}. Response text: {response.text[:200]}")
+                
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Image file not found: {image_path}")
+    except requests.exceptions.HTTPError as e:
+        raise requests.exceptions.HTTPError(f"HTTP error from DIAL API: {e}. Response: {response.text[:200] if 'response' in locals() else 'N/A'}")
+    except requests.exceptions.RequestException as e:
+        raise requests.exceptions.RequestException(f"Error sending request to DIAL API: {e}")
+
+
 st.title("Webcam DIAL App")
 st.write("This app captures video from your webcam and processes it using DIAL (Device Interaction and Automation Layer) technology.")
 
